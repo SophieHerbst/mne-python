@@ -1756,7 +1756,9 @@ def cluster_test(
     verbose=None,
 ):
     """Run a cluster permutation test from a DataFrame and a formula.
-
+    Either runs a paired t-test (within-participant), or a one-way ANOVA
+    (between-participant) depending on the presence of ``within_id``.
+    
     Parameters
     ----------
     df : pd.DataFrame
@@ -1764,6 +1766,7 @@ def cluster_test(
     formula : str
         Wilkinson notation formula for design matrix. The names of the dependent
         and independent variable should match the columns in ``df``.
+        Currently, only a single independent variable is supported, e.g. "dv ~ iv".
     within_id : None | str
         Name of column in ``df`` to use in identifying within-group contrasts.
         If ``within_id`` is not None, a paired t-test will be performed against zero (using mne.stats.ttest_1samp_no_p).
@@ -1774,7 +1777,8 @@ def cluster_test(
         If the independent variable has 2 levels, the data will be subtracted 
         for each participant (e.g., condition A - condition B). 
         If ``within_id`` is ``None``, will perform a between-group test (using mne.stats.f_oneway). 
-        This works for 2 levels or more.
+        This works for 2 levels or more. This test is only valid if the samples from the groups
+        do not overlap, i.e. the data come from different participants. 
         Specifying as ``within_id`` a variable in df that has more than 2 levels, 
         or one that is not in df, will result in an error.
 
@@ -1821,7 +1825,7 @@ def cluster_test(
     formula = formulaic.Formula(formula, _parser=parser)
     # extract the dependent and independent variable names
     dv_name = str(formula.lhs)
-    iv_name = str(formula.rhs)
+    iv_name = str(formula.rhs) # XXX only works with a single independent variable
 
     # validate the input dataframe and return the type of the data column entries
     is_epo, is_tfr, is_arr = _validate_cluster_df(df, dv_name, iv_name)
@@ -1882,10 +1886,10 @@ def cluster_test(
         if len(X) == 1:
             # turn it into an array
             X = X[0]  # already subtracted, just use the data as is
-            
+
         elif len(X) == 2:
             X = X[0] - X[1] # do subtraction for paired t-test
-        
+          
     # define stat function and threshold
     stat_fun, threshold = _check_fun(
         X=X, stat_fun=stat_fun, threshold=threshold, tail=tail, kind=kind

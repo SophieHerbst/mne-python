@@ -136,9 +136,12 @@ df = pd.DataFrame(
 formula = "evoked ~ condition"
 
 # run the new cluster test API and return the new cluster_result object
+# cluster_result = mne.stats.cluster_level.cluster_test(
+#     df=df, formula=formula, within_id="subject_index"
+# )
 cluster_result = mne.stats.cluster_level.cluster_test(
-    df=df, formula=formula, within_id="subject_index"
-)
+    df=df, formula=formula)
+    
 # TODO: add n_permutations to cluster_result
 
 # print the lowest cluster p-value
