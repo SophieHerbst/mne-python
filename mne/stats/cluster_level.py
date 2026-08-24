@@ -1775,6 +1775,9 @@ def cluster_test(
         This works for 2 levels or more.
         Specifying as ``within_id`` a variable in df that has more than 2 levels, 
         or one that is not in df, will result in an error.
+        # XXX should we verify that if a between-group test is requested, 
+        # the independent variable can has the same number of levels across participants
+        # and that there are not multiple observations per participant and level?
         
     %(stat_fun_clust_both)s
     %(tail_clust)s
