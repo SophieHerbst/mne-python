@@ -1765,9 +1765,17 @@ def cluster_test(
         Wilkinson notation formula for design matrix. The names of the dependent
         and independent variable should match the columns in ``df``.
     within_id : None | str
-        Name of column in ``df`` to use in identifying within-group contrasts. If
-        ``None``, will perform a between-group test. Ignored if the number of groups
-        (unique values in the independent variable column of ``df``) is greater than 2.
+        Name of column in ``df`` to use in identifying within-group contrasts.
+        Has to match a variable in ``df``, e.g. "subject_index". Currently, within tests
+        are only supported for 1 or 2 levels of the independent variable.
+        If a single level is provided, the data will be treated as already subtracted (e.g., condition A - condition B).
+        If two levels are provided, the data will be subtracted (e.g., condition A - condition B). 
+        A paired t-test will be performed (using mne.stats.ttest_1samp_no_p).
+        If ``None``, will perform a between-group test (using mne.stats.f_oneway). 
+        This works for 2 levels or more.
+        Specifying as ``within_id`` a variable in df that has more than 2 levels, 
+        or one that is not in df, will result in an error.
+        
     %(stat_fun_clust_both)s
     %(tail_clust)s
     %(threshold_clust_both)s
@@ -1816,20 +1824,23 @@ def cluster_test(
     # validate the input dataframe and return the type of the data column entries
     is_epo, is_tfr, is_arr = _validate_cluster_df(df, dv_name, iv_name)
 
-    # for within_subject designs, check if each subject has 2 observations
-    # if a within test is requested but there are more than 2 conditions
-    # currently the code breaks (within test for >2 conditions is not implemented)
+    # validate within_id to make sure it matches a variable in df
     _validate_type(within_id, (str, None), "within_id")
     if within_id is not None and within_id not in df.columns:
         raise ValueError(
             f"within_id must be the name of a column in df, got {within_id!r}"
         )
+    # check if within_id has 1 or 2 levels to do paired t-test (within)
     if within_id:
         df = df.copy(deep=False)  # Don't mutate input dataframe row order!
         df.sort_values([iv_name, within_id], inplace=True)
         counts = df[within_id].value_counts()
-        if any(counts != 2):
-            raise ValueError("for paired t-test, each subject must have 2 observations")
+        if any(counts > 2):
+            raise ValueError(
+                "for paired t-test, each value in within_id "
+                f"(column {within_id!r}) must have 1 or 2 levels, "
+                f"but found counts:\n{counts}"
+            )
 
     # extract the data from the dataframe
     outer_func = np.concatenate if is_epo else np.array
@@ -1848,30 +1859,35 @@ def cluster_test(
     # convert to a list-like X for clustering
     X = df.groupby(iv_name).agg({dv_name: func})[dv_name].to_list()
 
-    # determine test type
-    if len(X) == 1:
-        kind = "within"  # data already subtracted
-    elif len(X) > 2:
-        kind = "between" # XXX currently within not implemented for >2 conditions
-    elif (
-        len(set(x.shape for x in X)) > 1
-    ):  # check if there are unequal observations in each group
-        kind = "between"
-    # by now we know there are exactly 2 elements in X, and their shapes match
-    elif within_id in df:
+    # test type depends on whether within id is provided or not
+    if within_id is not None:
         kind = "within"
-        X = X[0] - X[1]
-    else:  # 2 elements in X but no within_id provided → unpaired test
+        logger.info("Running within-participants t-test.")
+
+    elif within_id is None:
         kind = "between"
+        logger.info("Running between-groups F-test.")
+        # XXX is it a problem if the observation has different levels
+        # across participants? 
+
+    # Now, for the within case check if there are unequal observations in each group
+    # and whether the data is already subtracted (1 level) or not (2 levels)
+    if kind == "within":
+        if len(set(x.shape for x in X)) > 1:
+            raise ValueError(
+                "for within-group tests, all groups must have the same number of observations, "
+                f"but found shapes: {[x.shape for x in X]}"
+            )
+        if len(X) == 2:
+            X = X[0] - X[1] # do subtraction for paired t-test
+        
+        # make sure X is still a list
+        X = [X] # XXX will this create an issue for already subtracted data?
 
     # define stat function and threshold
     stat_fun, threshold = _check_fun(
         X=X, stat_fun=stat_fun, threshold=threshold, tail=tail, kind=kind
     )
-
-    # check_fun doesn't work with list input`
-    if kind == "within":  # will this create an issue for already subtracted data?
-        X = [X]
 
     # Run the cluster-based permutation test
     stat_obs, clusters, cluster_p_values, H0 = _permutation_cluster_test(
