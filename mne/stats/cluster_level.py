@@ -1775,9 +1775,7 @@ def cluster_test(
         This works for 2 levels or more.
         Specifying as ``within_id`` a variable in df that has more than 2 levels, 
         or one that is not in df, will result in an error.
-        # XXX should we verify that if a between-group test is requested, 
-        # the independent variable can has the same number of levels across participants
-        # and that there are not multiple observations per participant and level?
+
         
     %(stat_fun_clust_both)s
     %(tail_clust)s
@@ -1870,15 +1868,13 @@ def cluster_test(
     elif within_id is None:
         kind = "between"
         logger.info("Running between-groups F-test.")
-        # XXX is it a problem if the observation has different levels
-        # across participants? 
 
     # Now, for the within case check if there are unequal observations in each group
     # and whether the data is already subtracted (1 level) or not (2 levels)
     if kind == "within":
         if len(set(x.shape for x in X)) > 1:
             raise ValueError(
-                "for within-group tests, all groups must have the same number of observations, "
+                "for within-group tests, all participants must have the same number of observations, "
                 f"but found shapes: {[x.shape for x in X]}"
             )
         if len(X) == 2:
