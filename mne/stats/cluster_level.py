@@ -1817,7 +1817,13 @@ def cluster_test(
     is_epo, is_tfr, is_arr = _validate_cluster_df(df, dv_name, iv_name)
 
     # for within_subject designs, check if each subject has 2 observations
+    # if a within test is requested but there are more than 2 conditions
+    # currently the code breaks (within test for >2 conditions is not implemented)
     _validate_type(within_id, (str, None), "within_id")
+    if within_id is not None and within_id not in df.columns:
+        raise ValueError(
+            f"within_id must be the name of a column in df, got {within_id!r}"
+        )
     if within_id:
         df = df.copy(deep=False)  # Don't mutate input dataframe row order!
         df.sort_values([iv_name, within_id], inplace=True)
@@ -1846,7 +1852,7 @@ def cluster_test(
     if len(X) == 1:
         kind = "within"  # data already subtracted
     elif len(X) > 2:
-        kind = "between"
+        kind = "between" # XXX currently within not implemented for >2 conditions
     elif (
         len(set(x.shape for x in X)) > 1
     ):  # check if there are unequal observations in each group
